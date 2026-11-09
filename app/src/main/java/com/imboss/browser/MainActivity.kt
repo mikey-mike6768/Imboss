@@ -25,6 +25,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.webkit.DownloadListener
+import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -237,6 +238,11 @@ class MainActivity : Activity() {
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.loadsImagesAutomatically = true
+        settings.databaseEnabled = true
+        // Many modern media sites rely on cookies shared across their player and
+        // authentication endpoints. WebView disables third-party cookies by default.
+        CookieManager.getInstance().setAcceptCookie(true)
+        CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
         // Keep the platform WebView user-agent intact. Spoofing it can break site feature detection.
         settings.mediaPlaybackRequiresUserGesture = false
         addJavascriptInterface(MediaBridge(this), "ImbossMedia")
@@ -294,6 +300,15 @@ class MainActivity : Activity() {
                 if (tabs.indexOf(tab) == active) address.setText(tab.url)
                 installMediaHooks(view)
                 refreshTabs()
+            }
+
+            override fun onRenderProcessGone(view: WebView?, detail: android.webkit.RenderProcessGoneDetail?): Boolean {
+                val tab = tabs.firstOrNull { it.web === view } ?: return true
+                tab.playing = false
+                if (mediaTabIndex == tabs.indexOf(tab)) mediaTabIndex = -1
+                toast("This page was restarted by Android. Reload it to continue.")
+                refreshTabs()
+                return true
             }
         }
         setDownloadListener(DownloadListener { url, userAgent, disposition, mime, _ ->
