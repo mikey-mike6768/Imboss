@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.webkit.DownloadListener
@@ -76,17 +77,19 @@ class MainActivity : Activity() {
 
     private fun btn(value: String, action: () -> Unit) = TextView(this).apply {
         text = value; textSize = 14f; setTextColor(fg()); gravity = Gravity.CENTER
-        setPadding(14, 10, 14, 10); background = glass(); isClickable = true
+        includeFontPadding = false
+        minHeight = 48
+        setPadding(14, 4, 14, 4); background = glass(); isClickable = true
         setOnClickListener { action() }
     }
 
     private fun buildUi() {
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(10, 8, 10, 8)
+            setPadding(10, 4, 10, 6)
             setBackgroundColor(bg())
         }
-        val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(5, 2, 2, 8) }
+        val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(5, 0, 2, 5) }
         header.addView(txt("IMBOSS", 22f, true).apply {
             letterSpacing = 0.16f; setTextColor(accent)
         }, LinearLayout.LayoutParams(0, 46, 1f))
@@ -131,11 +134,18 @@ class MainActivity : Activity() {
         }
         root.addView(bottom)
         setContentView(root)
+        @Suppress("DEPRECATION")
+        window.statusBarColor = bg()
+        @Suppress("DEPRECATION")
+        window.navigationBarColor = bg()
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility = if (dark) 0 else
+            (ViewGroup.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or ViewGroup.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR)
     }
 
     private fun homePanel(): ScrollView {
         val scroll = ScrollView(this)
-        val page = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(9, 30, 9, 25) }
+        val page = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(9, 20, 9, 24) }
         page.addView(txt(if (privateMode) "PRIVATE SESSION" else "YOUR SPACE", 11f, true).apply {
             setTextColor(accent); letterSpacing = 0.17f
         })
@@ -147,26 +157,34 @@ class MainActivity : Activity() {
             address.requestFocus()
             (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
                 .showSoftInput(address, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
-        }, LinearLayout.LayoutParams(-1, 54).apply { bottomMargin = 22 })
+        }, LinearLayout.LayoutParams(-1, 58).apply { bottomMargin = 22 })
         page.addView(txt("YOUR SERVICES", 12f, true).apply {
             setTextColor(muted()); setPadding(3, 0, 0, 10)
         })
-        val grid = GridLayout(this).apply { columnCount = 2 }
-        services.forEach { (name, url) ->
-            if (prefs.getBoolean("service_" + name, true)) {
-                val tile = btn(serviceIcon(name) + "    " + name) { navigate(url) }
-                val width = resources.displayMetrics.widthPixels / 2 - 34
-                grid.addView(tile, ViewGroup.MarginLayoutParams(width, 62).apply { setMargins(4, 4, 4, 4) })
+        val serviceNames = services.keys.filter { prefs.getBoolean("service_" + it, true) }.toList()
+        serviceNames.chunked(2).forEach { pair ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
             }
+            pair.forEach { name ->
+                row.addView(btn(serviceIcon(name) + "    " + name) { navigate(services[name]!!) },
+                    LinearLayout.LayoutParams(0, 54, 1f).apply { setMargins(3, 3, 3, 3) })
+            }
+            if (pair.size == 1) {
+                row.addView(View(this), LinearLayout.LayoutParams(0, 54, 1f).apply {
+                    setMargins(3, 3, 3, 3)
+                })
+            }
+            page.addView(row, LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
-        page.addView(grid)
         page.addView(txt("QUICK ACCESS", 12f, true).apply {
             setTextColor(muted()); setPadding(3, 20, 0, 10)
         })
         listOf("Google" to "https://google.com", "YouTube" to "https://youtube.com",
             "Wikipedia" to "https://wikipedia.org").forEach { item ->
             page.addView(btn("↗    " + item.first) { navigate(item.second) },
-                LinearLayout.LayoutParams(-1, 46).apply { bottomMargin = 7 })
+                LinearLayout.LayoutParams(-1, 54).apply { bottomMargin = 7 })
         }
         page.addView(txt("IMBOSS  •  Browse your way", 11f).apply {
             setTextColor(muted()); gravity = Gravity.CENTER; setPadding(0, 25, 0, 8)
