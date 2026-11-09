@@ -11,6 +11,7 @@ import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 
 class MediaPlaybackService : Service() {
     companion object {
@@ -28,6 +29,7 @@ class MediaPlaybackService : Service() {
     private var session: MediaSession? = null
     private var title = "IMBOSS media"
     private var playing = false
+    private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -73,6 +75,15 @@ class MediaPlaybackService : Service() {
 
     private fun updateState(isPlaying: Boolean) {
         playing = isPlaying
+        if (playing) {
+            if (wakeLock == null) {
+                wakeLock = (getSystemService(POWER_SERVICE) as PowerManager)
+                    .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "IMBOSS:MediaPlayback")
+            }
+            if (wakeLock?.isHeld != true) wakeLock?.acquire()
+        } else if (wakeLock?.isHeld == true) {
+            wakeLock?.release()
+        }
         val state = if (playing) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED
         session?.setMetadata(
             android.media.MediaMetadata.Builder()
@@ -109,7 +120,7 @@ class MediaPlaybackService : Service() {
                 .setVisibility(Notification.VISIBILITY_PUBLIC)
                 .setOngoing(playing)
                 .addAction(Notification.Action.Builder(playPause, action, mediaActionPendingIntent()).build())
-                .setStyle(Notification.MediaStyle().setMediaSession(session?.sessionToken).setShowActionsInCompactView(0))
+                .setStyle(Notification.MediaStyle().setMediaSession(session!!.sessionToken).setShowActionsInCompactView(0))
                 .build()
         } else {
             @Suppress("DEPRECATION")
@@ -141,6 +152,8 @@ class MediaPlaybackService : Service() {
     }
 
     override fun onDestroy() {
+        if (wakeLock?.isHeld == true) wakeLock?.release()
+        wakeLock = null
         session?.isActive = false
         session?.release()
         session = null
