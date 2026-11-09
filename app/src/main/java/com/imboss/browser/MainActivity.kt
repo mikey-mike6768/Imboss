@@ -25,6 +25,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.webkit.DownloadListener
+import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -56,6 +57,7 @@ class MainActivity : Activity() {
     private var fullscreenCallback: WebChromeClient.CustomViewCallback? = null
     private var previousOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     private var mediaTabIndex = -1
+    private var floatingMediaButton: TextView? = null
     companion object {
         @Volatile var activeInstance: MainActivity? = null
     }
@@ -237,6 +239,11 @@ class MainActivity : Activity() {
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.loadsImagesAutomatically = true
+        settings.databaseEnabled = true
+        // Many modern media sites rely on cookies shared across their player and
+        // authentication endpoints. WebView disables third-party cookies by default.
+        CookieManager.getInstance().setAcceptCookie(true)
+        CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
         // Keep the platform WebView user-agent intact. Spoofing it can break site feature detection.
         settings.mediaPlaybackRequiresUserGesture = false
         addJavascriptInterface(MediaBridge(this), "ImbossMedia")
@@ -295,6 +302,15 @@ class MainActivity : Activity() {
                 installMediaHooks(view)
                 refreshTabs()
             }
+
+            override fun onRenderProcessGone(view: WebView?, detail: android.webkit.RenderProcessGoneDetail?): Boolean {
+                val tab = tabs.firstOrNull { it.web === view } ?: return true
+                tab.playing = false
+                if (mediaTabIndex == tabs.indexOf(tab)) mediaTabIndex = -1
+                toast("This page was restarted by Android. Reload it to continue.")
+                refreshTabs()
+                return true
+            }
         }
         setDownloadListener(DownloadListener { url, userAgent, disposition, mime, _ ->
             try {
@@ -327,6 +343,7 @@ class MainActivity : Activity() {
                     tabs[found].playing = playing
                     if (!playing && tabs.none { it.playing }) mediaTabIndex = -1
                     refreshTabs()
+                    updateFloatingMediaButton()
                     if (android.os.Build.VERSION.SDK_INT >= 26) {
                         if (playing) owner.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, true)
                         if (fullscreenView != null) {
@@ -386,6 +403,7 @@ class MainActivity : Activity() {
             target.web.evaluateJavascript(js, null)
             target.playing = play
             refreshTabs()
+            updateFloatingMediaButton()
         }
     }
 
@@ -512,13 +530,50 @@ class MainActivity : Activity() {
         val bar = root.getChildAt(1) as LinearLayout
         for (i in 0..2) bar.getChildAt(i).visibility = if (isHome) View.GONE else View.VISIBLE
         if (isHome) {
+            floatingMediaButton = null
             content.addView(homePanel(), FrameLayout.LayoutParams(-1, -1))
             address.setText("")
         } else {
             content.addView(tab.web, FrameLayout.LayoutParams(-1, -1))
             address.setText(tab.url)
+            val mediaButton = TextView(this).apply {
+                textSize = 21f
+                gravity = Gravity.CENTER
+                setTextColor(Color.WHITE)
+                contentDescription = "Play or pause webpage media"
+                background = GradientDrawable().apply {
+                    setColor(accent)
+                    cornerRadius = dp(30).toFloat()
+                    setStroke(dp(1), 0x66FFFFFF)
+                }
+                elevation = dp(8).toFloat()
+                setOnClickListener {
+                    val current = tabs.getOrNull(active) ?: return@setOnClickListener
+                    if (current.playing) {
+                        controlWebPlayback(false, active)
+                    } else {
+                        val js = "(function(){var m=[...document.querySelectorAll('video,audio')];if(!m.length)return false;m.forEach(function(x){if(x.paused)x.play().catch(function(){});});return true;})()"
+                        current.web.evaluateJavascript(js) { result ->
+                            if (result == "false" || result == "null") toast("No playable audio or video found on this page")
+                        }
+                    }
+                }
+            }
+            floatingMediaButton = mediaButton
+            content.addView(mediaButton, FrameLayout.LayoutParams(dp(56), dp(56), Gravity.BOTTOM or Gravity.END).apply {
+                setMargins(0, 0, dp(18), dp(18))
+            })
+            updateFloatingMediaButton()
         }
         refreshTabs()
+    }
+
+    private fun updateFloatingMediaButton() {
+        val button = floatingMediaButton ?: return
+        val playing = tabs.getOrNull(active)?.playing == true
+        button.text = if (playing) "Ⅱ" else "▶"
+        button.contentDescription = if (playing) "Pause webpage media" else "Play webpage media"
+        button.visibility = if (tabs.getOrNull(active)?.url?.startsWith("http") == true) View.VISIBLE else View.GONE
     }
 
     private fun switchTab(index: Int) {

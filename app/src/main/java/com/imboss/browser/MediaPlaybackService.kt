@@ -134,7 +134,7 @@ class MediaPlaybackService : Service() {
             // a second focus lease here or pause the page when this redundant request fails.
             updateState(true)
         } else updateState(false)
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     private fun requestAudioFocusAndPlay() {
