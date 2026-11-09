@@ -84,7 +84,13 @@ class MediaPlaybackService : Service() {
         super.onCreate()
         createChannel()
         audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
-        registerReceiver(noisyReceiver, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
+        val noisyFilter = IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(noisyReceiver, noisyFilter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(noisyReceiver, noisyFilter)
+        }
         session = MediaSession(this, "IMBOSS playback").apply {
             setCallback(object : MediaSession.Callback() {
                 override fun onPlay() { requestFocusAndPlay() }
