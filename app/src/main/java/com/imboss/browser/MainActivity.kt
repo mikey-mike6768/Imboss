@@ -133,9 +133,14 @@ class MainActivity : Activity() {
                 } else false
             }
         }
+        bar.addView(navBtn("‹") { back() }, LinearLayout.LayoutParams(dp(38), dp(44)).apply { setMargins(dp(1), 0, dp(1), 0) })
+        bar.addView(navBtn("›") { forward() }, LinearLayout.LayoutParams(dp(38), dp(44)).apply { setMargins(dp(1), 0, dp(1), 0) })
+        bar.addView(navBtn("⌂") { home() }, LinearLayout.LayoutParams(dp(38), dp(44)).apply { setMargins(dp(1), 0, dp(3), 0) })
         bar.addView(address, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        bar.addView(btn("☆") { bookmark() }, LinearLayout.LayoutParams(dp(44), dp(44)).apply { setMargins(dp(3), 0, dp(3), 0) })
-        bar.addView(btn("Go") { navigate(address.text.toString()) }, LinearLayout.LayoutParams(dp(48), dp(44)))
+        bar.addView(btn("☆") { bookmark() }, LinearLayout.LayoutParams(dp(42), dp(44)).apply { setMargins(dp(2), 0, dp(2), 0) })
+        bar.addView(btn("Go") { navigate(address.text.toString()) }, LinearLayout.LayoutParams(dp(46), dp(44)))
+        bar.addView(btn("▢") { tabsDialog() }, LinearLayout.LayoutParams(dp(42), dp(44)).apply { setMargins(dp(2), 0, dp(2), 0) })
+        bar.addView(btn("⋯") { menuDialog() }, LinearLayout.LayoutParams(dp(42), dp(44)))
         root.addView(bar)
 
         val tabsScroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; setPadding(0, dp(6), 0, dp(6)) }
@@ -207,6 +212,11 @@ class MainActivity : Activity() {
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.loadsImagesAutomatically = true
+        // Remove Android WebView's explicit embedded-browser markers where possible.
+        settings.userAgentString = settings.userAgentString
+            .replace("; wv", "")
+            .replace("Version/4.0 ", "")
+        settings.mediaPlaybackRequiresUserGesture = false
         settings.javaScriptCanOpenWindowsAutomatically = false
         settings.setSupportMultipleWindows(false)
         settings.allowFileAccess = false
@@ -257,7 +267,14 @@ class MainActivity : Activity() {
     private fun showActive() {
         content.removeAllViews()
         val tab = tabs.getOrNull(active) ?: return
-        if (tab.url == "imboss://home") {
+        val isHome = tab.url == "imboss://home"
+        // Home keeps the full dashboard controls; webpages use a compact Chrome-like toolbar.
+        root.getChildAt(0).visibility = if (isHome) View.VISIBLE else View.GONE
+        root.getChildAt(2).visibility = if (isHome) View.VISIBLE else View.GONE
+        root.getChildAt(4).visibility = if (isHome) View.VISIBLE else View.GONE
+        val bar = root.getChildAt(1) as LinearLayout
+        for (i in 0..2) bar.getChildAt(i).visibility = if (isHome) View.GONE else View.VISIBLE
+        if (isHome) {
             content.addView(homePanel(), FrameLayout.LayoutParams(-1, -1))
             address.setText("")
         } else {
@@ -313,8 +330,7 @@ class MainActivity : Activity() {
         val tab = tabs[active]
         tab.url = target
         tab.title = Uri.parse(target).host ?: "Loading"
-        content.removeAllViews()
-        content.addView(tab.web, FrameLayout.LayoutParams(-1, -1))
+        showActive()
         address.setText(target)
         tab.web.loadUrl(target)
         refreshTabs()
