@@ -230,16 +230,14 @@ class MainActivity : Activity() {
 
     private fun createWebView(): WebView = WebView(this).apply {
         setBackgroundColor(Color.WHITE)
+        setLayerType(View.LAYER_TYPE_HARDWARE, null)
         if (android.os.Build.VERSION.SDK_INT >= 26) {
             setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, true)
         }
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.loadsImagesAutomatically = true
-        // Remove Android WebView's explicit embedded-browser markers where possible.
-        settings.userAgentString = settings.userAgentString
-            .replace("; wv", "")
-            .replace("Version/4.0 ", "")
+        // Keep the platform WebView user-agent intact. Spoofing it can break site feature detection.
         settings.mediaPlaybackRequiresUserGesture = false
         addJavascriptInterface(MediaBridge(), "ImbossMedia")
         settings.javaScriptCanOpenWindowsAutomatically = false
