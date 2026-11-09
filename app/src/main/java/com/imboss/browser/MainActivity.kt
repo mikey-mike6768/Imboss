@@ -16,6 +16,10 @@ import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.util.Rational
 import android.app.PictureInPictureParams
+import android.app.PendingIntent
+import android.app.RemoteAction
+import android.graphics.drawable.Icon
+import android.content.pm.PackageManager
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -72,7 +76,11 @@ class MainActivity : Activity() {
         accent = prefs.getInt("accent", accent)
         engine = prefs.getString("engine", "Google") ?: "Google"
         buildUi()
-        newTab()
+        if (savedInstanceState != null) restoreTabs(savedInstanceState) else newTab()
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 710)
+        }
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density + 0.5f).toInt()
@@ -411,6 +419,42 @@ class MainActivity : Activity() {
             .setNegativeButton("Close", null).show()
     }
 
+    private fun restoreTabs(state: Bundle) {
+        val saved = state.getParcelableArrayList<Bundle>("imboss_tabs")
+        if (saved.isNullOrEmpty()) { newTab(); return }
+        saved.forEach { item ->
+            val web = createWebView()
+            val tab = Tab(web)
+            tabs.add(tab)
+            val webState = item.getBundle("web_state")
+            if (webState != null && web.restoreState(webState) != null) {
+                tab.url = web.url ?: item.getString("url", "imboss://home")
+                tab.title = item.getString("title", "Restored tab")
+            } else {
+                tab.url = item.getString("url", "imboss://home")
+                if (tab.url != "imboss://home") web.loadUrl(tab.url)
+            }
+        }
+        active = state.getInt("imboss_active", 0).coerceIn(0, tabs.lastIndex)
+        showActive()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        val saved = ArrayList<Bundle>()
+        tabs.forEach { tab ->
+            val item = Bundle()
+            item.putString("url", tab.url)
+            item.putString("title", tab.title)
+            val webState = Bundle()
+            tab.web.saveState(webState)
+            item.putBundle("web_state", webState)
+            saved.add(item)
+        }
+        outState.putParcelableArrayList("imboss_tabs", saved)
+        outState.putInt("imboss_active", active)
+    }
+
     private fun newTab(url: String? = null) {
         val web = createWebView()
         val tab = Tab(web, url ?: "imboss://home")
@@ -459,10 +503,20 @@ class MainActivity : Activity() {
 
     private fun closeTab(index: Int) {
         if (index !in tabs.indices) return
-        tabs[index].web.stopLoading()
-        tabs[index].web.destroy()
-        tabs.removeAt(index)
-        if (tabs.isEmpty()) newTab() else { active = index.coerceAtMost(tabs.lastIndex); showActive() }
+        val close = {
+            tabs[index].web.stopLoading()
+            tabs[index].web.destroy()
+            tabs.removeAt(index)
+            if (mediaTabIndex == index) mediaTabIndex = -1
+            else if (mediaTabIndex > index) mediaTabIndex--
+            if (tabs.isEmpty()) newTab() else { active = index.coerceAtMost(tabs.lastIndex); showActive() }
+        }
+        if (tabs[index].playing) {
+            AlertDialog.Builder(this).setTitle("Media is playing")
+                .setMessage("Stop playback and close this tab?")
+                .setPositiveButton("Close tab") { _, _ -> close() }
+                .setNegativeButton("Keep open", null).show()
+        } else close()
     }
 
     private fun refreshTabs() {
@@ -644,6 +698,17 @@ class MainActivity : Activity() {
             try { enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build()) }
             catch (_: Exception) { }
         }
+    }
+
+    private fun buildPipParams(): PictureInPictureParams {
+        val playing = tabs.getOrNull(mediaTabIndex)?.playing == true
+        val icon = Icon.createWithResource(this, if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play)
+        val action = Intent(this, MediaPlaybackService::class.java).apply {
+            this.action = if (playing) MediaPlaybackService.ACTION_PAUSE else MediaPlaybackService.ACTION_PLAY
+        }
+        val pending = PendingIntent.getService(this, 72, action, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val remote = RemoteAction(icon, if (playing) "Pause" else "Play", "Media playback", pending)
+        return PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).setActions(listOf(remote)).build()
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
