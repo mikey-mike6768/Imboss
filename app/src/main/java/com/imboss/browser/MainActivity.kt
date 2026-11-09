@@ -239,7 +239,7 @@ class MainActivity : Activity() {
         settings.loadsImagesAutomatically = true
         // Keep the platform WebView user-agent intact. Spoofing it can break site feature detection.
         settings.mediaPlaybackRequiresUserGesture = false
-        addJavascriptInterface(MediaBridge(), "ImbossMedia")
+        addJavascriptInterface(MediaBridge(this), "ImbossMedia")
         settings.javaScriptCanOpenWindowsAutomatically = false
         settings.setSupportMultipleWindows(false)
         settings.allowFileAccess = false
@@ -258,6 +258,9 @@ class MainActivity : Activity() {
                 }
                 fullscreenView = view
                 fullscreenCallback = callback
+                if (android.os.Build.VERSION.SDK_INT >= 26) {
+                    try { setPictureInPictureParams(buildPipParams()) } catch (_: Exception) { }
+                }
                 previousOrientation = requestedOrientation
                 if (prefs.getBoolean("media_auto_landscape", true)) requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                 root.getChildAt(0).visibility = View.GONE
@@ -308,7 +311,7 @@ class MainActivity : Activity() {
         })
     }
 
-    inner class MediaBridge {
+    inner class MediaBridge(private val owner: WebView) {
         @JavascriptInterface fun onPlaybackChanged(playing: Boolean, title: String?, url: String?) {
             runOnUiThread {
                 if (!prefs.getBoolean("media_background", true)) {
@@ -316,18 +319,26 @@ class MainActivity : Activity() {
                     current?.web?.evaluateJavascript("document.querySelectorAll('video,audio').forEach(m=>m.pause())", null)
                     return@runOnUiThread
                 }
-                val mediaUrl = url ?: ""
-                val found = tabs.indexOfFirst { it.url == mediaUrl }
+                val mediaUrl = url ?: owner.url.orEmpty()
+                // Bind media events to their originating WebView; URL matching breaks on redirects.
+                val found = tabs.indexOfFirst { it.web === owner }
                 if (found >= 0) {
                     mediaTabIndex = found
                     tabs[found].playing = playing
+                    if (!playing && tabs.none { it.playing }) mediaTabIndex = -1
                     refreshTabs()
+                    if (android.os.Build.VERSION.SDK_INT >= 26) {
+                        if (playing) owner.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, true)
+                        if (fullscreenView != null) {
+                            try { setPictureInPictureParams(buildPipParams()) } catch (_: Exception) { }
+                        }
+                    }
                 }
                 val intent = Intent(this@MainActivity, MediaPlaybackService::class.java).apply {
                     action = if (playing) MediaPlaybackService.ACTION_PLAYING else MediaPlaybackService.ACTION_PAUSED
                     putExtra(MediaPlaybackService.EXTRA_TITLE, title?.take(120) ?: "IMBOSS media")
                     putExtra(MediaPlaybackService.EXTRA_URL, mediaUrl)
-                    putExtra(MediaPlaybackService.EXTRA_TAB, mediaTabIndex.coerceAtLeast(0))
+                    putExtra(MediaPlaybackService.EXTRA_TAB, found.coerceAtLeast(0))
                 }
                 if (android.os.Build.VERSION.SDK_INT >= 26) startForegroundService(intent) else startService(intent)
             }
@@ -352,6 +363,14 @@ class MainActivity : Activity() {
               document.addEventListener('ended', function(e) {
                 if (e.target && (e.target.tagName === 'VIDEO' || e.target.tagName === 'AUDIO')) report(e.target, false);
               }, true);
+              const applyMute = () => {
+                try {
+                  const state = window.__imbossTabMuted === true;
+                  document.querySelectorAll('video,audio').forEach(m => { m.muted = state; });
+                } catch(e) {}
+              };
+              new MutationObserver(applyMute).observe(document.documentElement, {childList:true, subtree:true});
+              document.addEventListener('loadedmetadata', applyMute, true);
             })();
         """.trimIndent()
         web?.evaluateJavascript(script, null)
@@ -412,7 +431,10 @@ class MainActivity : Activity() {
                         0 -> {
                             tab.muted = !tab.muted
                             val mutedValue = if (tab.muted) "true" else "false"
-                            tab.web.evaluateJavascript("document.querySelectorAll('video,audio').forEach(m=>m.muted=$mutedValue)", null)
+                            tab.web.evaluateJavascript(
+                                "window.__imbossTabMuted=$mutedValue;document.querySelectorAll('video,audio').forEach(m=>m.muted=$mutedValue)",
+                                null
+                            )
                             activeMediaDialog()
                         }
                         1 -> { tab.web.evaluateJavascript("document.querySelectorAll('video,audio').forEach(m=>m.pause())", null); tab.playing = false; refreshTabs() }
@@ -699,7 +721,7 @@ class MainActivity : Activity() {
         super.onUserLeaveHint()
         if (fullscreenView != null && prefs.getBoolean("media_auto_pip", false) &&
             android.os.Build.VERSION.SDK_INT >= 26 && !isInPictureInPictureMode) {
-            try { enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build()) }
+            try { enterPictureInPictureMode(buildPipParams()) }
             catch (_: Exception) { }
         }
     }
@@ -712,7 +734,13 @@ class MainActivity : Activity() {
         }
         val pending = PendingIntent.getService(this, 72, action, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val remote = RemoteAction(icon, if (playing) "Pause" else "Play", "Media playback", pending)
-        return PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).setActions(listOf(remote)).build()
+        val builder = PictureInPictureParams.Builder()
+            .setAspectRatio(Rational(16, 9))
+            .setActions(listOf(remote))
+        if (android.os.Build.VERSION.SDK_INT >= 31) builder.setAutoEnterEnabled(
+            prefs.getBoolean("media_auto_pip", false) && fullscreenView != null
+        )
+        return builder.build()
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {

@@ -84,7 +84,13 @@ class MediaPlaybackService : Service() {
         super.onCreate()
         createChannel()
         audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
-        registerReceiver(noisyReceiver, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
+        val noisyFilter = IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(noisyReceiver, noisyFilter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(noisyReceiver, noisyFilter)
+        }
         session = MediaSession(this, "IMBOSS playback").apply {
             setCallback(object : MediaSession.Callback() {
                 override fun onPlay() { requestFocusAndPlay() }
@@ -116,7 +122,7 @@ class MediaPlaybackService : Service() {
                 MainActivity.activeInstance?.controlWebPlayback(false, mediaTab)
                 updateState(false)
             }
-            return START_STICKY
+            return START_NOT_STICKY
         }
         title = intent?.getStringExtra(EXTRA_TITLE)?.takeIf { it.isNotBlank() } ?: title
         val url = intent?.getStringExtra(EXTRA_URL).orEmpty()
@@ -210,7 +216,7 @@ class MediaPlaybackService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, CHANNEL_ID)
             else Notification.Builder(this)
-        return builder.setSmallIcon(applicationInfo.icon)
+        return builder.setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle(title)
             .setContentText("$site • IMBOSS")
             .setContentIntent(launch)
