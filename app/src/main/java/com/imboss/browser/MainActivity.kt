@@ -230,6 +230,9 @@ class MainActivity : Activity() {
 
     private fun createWebView(): WebView = WebView(this).apply {
         setBackgroundColor(Color.WHITE)
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, true)
+        }
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.loadsImagesAutomatically = true
