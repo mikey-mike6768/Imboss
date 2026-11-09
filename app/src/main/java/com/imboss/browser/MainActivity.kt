@@ -12,6 +12,10 @@ import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
+import android.util.Rational
+import android.app.PictureInPictureParams
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -33,7 +37,7 @@ import android.widget.Toast
 import org.json.JSONArray
 
 class MainActivity : Activity() {
-    private data class Tab(val web: WebView, var url: String = "imboss://home", var title: String = "New tab")
+    private data class Tab(val web: WebView, var url: String = "imboss://home", var title: String = "New tab", var playing: Boolean = false, var muted: Boolean = false)
     private lateinit var root: LinearLayout
     private lateinit var address: EditText
     private lateinit var tabStrip: LinearLayout
@@ -46,6 +50,8 @@ class MainActivity : Activity() {
     private var engine = "Google"
     private var fullscreenView: View? = null
     private var fullscreenCallback: WebChromeClient.CustomViewCallback? = null
+    private var previousOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    private var mediaTabIndex = -1
     companion object {
         @Volatile var activeInstance: MainActivity? = null
     }
@@ -243,6 +249,8 @@ class MainActivity : Activity() {
                 }
                 fullscreenView = view
                 fullscreenCallback = callback
+                previousOrientation = requestedOrientation
+                if (prefs.getBoolean("media_auto_landscape", true)) requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                 root.getChildAt(0).visibility = View.GONE
                 root.getChildAt(1).visibility = View.GONE
                 root.getChildAt(2).visibility = View.GONE
@@ -295,12 +303,20 @@ class MainActivity : Activity() {
     }
 
     inner class MediaBridge {
-        @JavascriptInterface fun onPlaybackChanged(playing: Boolean, title: String?) {
+        @JavascriptInterface fun onPlaybackChanged(playing: Boolean, title: String?, url: String?) {
             runOnUiThread {
+                val mediaUrl = url ?: ""
+                val found = tabs.indexOfFirst { it.url == mediaUrl }
+                if (found >= 0) {
+                    mediaTabIndex = found
+                    tabs[found].playing = playing
+                    refreshTabs()
+                }
                 val intent = Intent(this@MainActivity, MediaPlaybackService::class.java).apply {
                     action = if (playing) MediaPlaybackService.ACTION_PLAYING else MediaPlaybackService.ACTION_PAUSED
                     putExtra(MediaPlaybackService.EXTRA_TITLE, title?.take(120) ?: "IMBOSS media")
-                    putExtra(MediaPlaybackService.EXTRA_URL, tabs.getOrNull(active)?.url ?: "")
+                    putExtra(MediaPlaybackService.EXTRA_URL, mediaUrl)
+                    putExtra(MediaPlaybackService.EXTRA_TAB, mediaTabIndex.coerceAtLeast(0))
                 }
                 if (android.os.Build.VERSION.SDK_INT >= 26) startForegroundService(intent) else startService(intent)
             }
@@ -314,7 +330,7 @@ class MainActivity : Activity() {
               window.__imbossMediaHooked = true;
               function report(el, playing) {
                 var t = (document.title || el.getAttribute('aria-label') || 'Media').slice(0,120);
-                try { window.ImbossMedia.onPlaybackChanged(playing, t); } catch(e) {}
+                try { window.ImbossMedia.onPlaybackChanged(playing, t, location.href); } catch(e) {}
               }
               document.addEventListener('play', function(e) {
                 if (e.target && (e.target.tagName === 'VIDEO' || e.target.tagName === 'AUDIO')) report(e.target, true);
@@ -330,14 +346,69 @@ class MainActivity : Activity() {
         web?.evaluateJavascript(script, null)
     }
 
-    internal fun controlWebPlayback(play: Boolean) {
+    internal fun controlWebPlayback(play: Boolean, index: Int = mediaTabIndex) {
         runOnUiThread {
+            val target = tabs.getOrNull(index) ?: return@runOnUiThread
             val js = if (play)
                 "document.querySelectorAll('video,audio').forEach(function(m){if(m.paused)m.play().catch(function(){});})"
             else
                 "document.querySelectorAll('video,audio').forEach(function(m){if(!m.paused)m.pause();})"
-            tabs.getOrNull(active)?.web?.evaluateJavascript(js, null)
+            target.web.evaluateJavascript(js, null)
+            target.playing = play
+            refreshTabs()
         }
+    }
+
+    private fun stopAllMedia() {
+        tabs.forEach { tab ->
+            tab.web.evaluateJavascript("document.querySelectorAll('video,audio').forEach(function(m){m.pause();})", null)
+            tab.playing = false
+        }
+        mediaTabIndex = -1
+        stopService(Intent(this, MediaPlaybackService::class.java).setAction(MediaPlaybackService.ACTION_STOP))
+        refreshTabs()
+    }
+
+    private fun mediaCenterDialog() {
+        val labels = arrayOf("Background audio (where site permits)", "Automatic Picture-in-Picture",
+            "Media notifications", "Lock-screen controls", "Bluetooth headset controls",
+            "Immersive fullscreen", "Automatic landscape orientation",
+            "Restore after temporary audio interruption")
+        val keys = arrayOf("media_background", "media_auto_pip", "media_notifications", "media_lock_controls",
+            "media_bluetooth", "media_immersive", "media_auto_landscape", "media_resume_focus")
+        val checked = keys.mapIndexed { i, key -> prefs.getBoolean(key, i != 1 && i != 7) }.toBooleanArray()
+        val dialog = AlertDialog.Builder(this).setTitle("IMBOSS Media Center")
+            .setMultiChoiceItems(labels, checked) { _, which, enabled -> prefs.edit().putBoolean(keys[which], enabled).apply() }
+            .setPositiveButton("Done", null)
+            .setNeutralButton("Active media tabs") { _, _ -> activeMediaDialog() }
+            .setNegativeButton("Stop all media", null).create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener { stopAllMedia(); dialog.dismiss() }
+        }
+        dialog.show()
+    }
+
+    private fun activeMediaDialog() {
+        val activeTabs = tabs.mapIndexedNotNull { i, tab -> if (tab.playing) i to tab else null }
+        if (activeTabs.isEmpty()) { toast("No active media tabs detected"); return }
+        val labels = activeTabs.map { (_, tab) -> (if (tab.muted) "Muted • " else "Playing • ") + tab.title }.toTypedArray()
+        AlertDialog.Builder(this).setTitle("Active media")
+            .setItems(labels) { _, which ->
+                val (index, tab) = activeTabs[which]
+                val actions = arrayOf(if (tab.muted) "Unmute tab" else "Mute tab", "Stop this tab", "Switch to tab")
+                AlertDialog.Builder(this).setTitle(tab.title).setItems(actions) { _, action ->
+                    when (action) {
+                        0 -> {
+                            tab.muted = !tab.muted
+                            tab.web.evaluateJavascript("document.querySelectorAll('video,audio').forEach(m=>m.muted=\u0024{tab.muted})", null)
+                            activeMediaDialog()
+                        }
+                        1 -> { tab.web.evaluateJavascript("document.querySelectorAll('video,audio').forEach(m=>m.pause())", null); tab.playing = false; refreshTabs() }
+                        2 -> switchTab(index)
+                    }
+                }.show()
+            }.setPositiveButton("Stop all") { _, _ -> stopAllMedia() }
+            .setNegativeButton("Close", null).show()
     }
 
     private fun newTab(url: String? = null) {
@@ -354,6 +425,7 @@ class MainActivity : Activity() {
         content.removeView(view)
         fullscreenCallback?.onCustomViewHidden()
         fullscreenCallback = null
+        requestedOrientation = previousOrientation
         window.decorView.systemUiVisibility = if (dark) 0 else
             (View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR)
         showActive()
@@ -397,7 +469,7 @@ class MainActivity : Activity() {
         if (!::tabStrip.isInitialized) return
         tabStrip.removeAllViews()
         tabs.forEachIndexed { i, tab ->
-            tabStrip.addView(btn((if (i == active) "● " else "") + tab.title.take(15) + "  ×") {
+            tabStrip.addView(btn((if (tab.playing) "♫ " else if (i == active) "● " else "") + tab.title.take(15) + "  ×") {
                 if (i == active) closeTab(i) else switchTab(i)
             }, LinearLayout.LayoutParams(-2, dp(40)).apply { setMargins(dp(3), 0, dp(3), 0) })
         }
@@ -456,7 +528,7 @@ class MainActivity : Activity() {
 
     private fun menuDialog() {
         val items = arrayOf("Bookmarks", "History", "Downloads", "Manage services",
-            "Private browsing: " + if (privateMode) "ON" else "OFF", "Clear browsing data", "Settings")
+            "Private browsing: " + if (privateMode) "ON" else "OFF", "Clear browsing data", "Media Center", "Settings")
         AlertDialog.Builder(this).setTitle("IMBOSS").setItems(items) { _, which ->
             when (which) {
                 0 -> savedList("Bookmarks", "bookmarks")
@@ -470,14 +542,15 @@ class MainActivity : Activity() {
                     showActive()
                 }
                 5 -> clearData()
-                6 -> settingsDialog()
+                6 -> mediaCenterDialog()
+                7 -> settingsDialog()
             }
         }.show()
     }
 
     private fun settingsDialog() {
         val items = arrayOf("Search engine: " + engine, "Switch " + if (dark) "to light theme" else "to dark theme",
-            "Accent colour", "Service shortcuts", "About IMBOSS")
+            "Accent colour", "Service shortcuts", "Media Center", "About IMBOSS")
         AlertDialog.Builder(this).setTitle("Settings").setItems(items) { _, which ->
             when (which) {
                 0 -> AlertDialog.Builder(this).setTitle("Search engine")
@@ -502,7 +575,8 @@ class MainActivity : Activity() {
                         }.show()
                 }
                 3 -> manageServices()
-                4 -> AlertDialog.Builder(this).setTitle("IMBOSS Browser")
+                4 -> mediaCenterDialog()
+                5 -> AlertDialog.Builder(this).setTitle("IMBOSS Browser")
                     .setMessage("Version 0.2.0\nUses Android System WebView (Chromium-based), not a separately bundled Chromium engine. Private mode prevents this app from saving its browsing history, but does not guarantee anonymity or block website tracking.")
                     .setPositiveButton("OK", null).show()
             }
@@ -562,6 +636,22 @@ class MainActivity : Activity() {
     }
 
     private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (fullscreenView != null && prefs.getBoolean("media_auto_pip", false) &&
+            android.os.Build.VERSION.SDK_INT >= 26 && !isInPictureInPictureMode) {
+            try { enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build()) }
+            catch (_: Exception) { }
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        if (isInPictureInPictureMode) {
+            for (i in 0 until root.childCount) root.getChildAt(i).visibility = View.GONE
+        } else if (fullscreenView == null) showActive()
+    }
 
     override fun onBackPressed() {
         if (fullscreenView != null) {
