@@ -67,7 +67,7 @@ class MediaPlaybackService : Service() {
                 updateState(false)
             }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                resumeAfterFocus = playing
+                resumeAfterFocus = playing && getSharedPreferences("imboss_settings", MODE_PRIVATE).getBoolean("media_resume_focus", false)
                 MainActivity.activeInstance?.controlWebPlayback(false, mediaTab)
                 updateState(false)
             }
@@ -216,11 +216,16 @@ class MediaPlaybackService : Service() {
             .setContentTitle(title)
             .setContentText("$site • IMBOSS")
             .setContentIntent(launch)
-            .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .setVisibility(if (getSharedPreferences("imboss_settings", MODE_PRIVATE).getBoolean("media_lock_controls", true)) Notification.VISIBILITY_PUBLIC else Notification.VISIBILITY_PRIVATE)
             .setOngoing(playing)
-            .addAction(icon, label, control)
-            .setStyle(Notification.MediaStyle().setMediaSession(session?.sessionToken).setShowActionsInCompactView(0))
-            .build()
+            .apply {
+                if (getSharedPreferences("imboss_settings", MODE_PRIVATE).getBoolean("media_notifications", true)) {
+                    addAction(icon, label, control)
+                }
+                if (getSharedPreferences("imboss_settings", MODE_PRIVATE).getBoolean("media_lock_controls", true)) {
+                    setStyle(Notification.MediaStyle().setMediaSession(session?.sessionToken).setShowActionsInCompactView(0))
+                }
+            }.build()
     }
 
     private fun createChannel() {
