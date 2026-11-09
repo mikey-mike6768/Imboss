@@ -87,8 +87,8 @@ class MediaPlaybackService : Service() {
         val state = if (playing) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED
         session?.setMetadata(
             android.media.MediaMetadata.Builder()
-                .putString(android.media.MediaMetadata.METADATA_TITLE, title)
-                .putString(android.media.MediaMetadata.METADATA_ARTIST, "Playing in IMBOSS")
+                .putString(android.media.MediaMetadata.METADATA_KEY_TITLE, title)
+                .putString(android.media.MediaMetadata.METADATA_KEY_ARTIST, "Playing in IMBOSS")
                 .build()
         )
         session?.setPlaybackState(
