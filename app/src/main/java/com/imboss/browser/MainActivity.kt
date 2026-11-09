@@ -16,6 +16,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.webkit.DownloadListener
+import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -140,54 +141,39 @@ class MainActivity : Activity() {
             (View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR)
     }
 
-    private fun homePanel(): ScrollView {
-        val scroll = ScrollView(this)
-        val page = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(9, 20, 9, 24) }
-        page.addView(txt(if (privateMode) "PRIVATE SESSION" else "YOUR SPACE", 11f, true).apply {
-            setTextColor(accent); letterSpacing = 0.17f
-        })
-        page.addView(txt("Good to see you.", 28f, true).apply { setPadding(0, 8, 0, 4) })
-        page.addView(txt("A calmer place for everything you do online.", 14f).apply {
-            setTextColor(muted()); setPadding(0, 0, 0, 24)
-        })
-        page.addView(btn("⌕    Search the web") {
-            address.requestFocus()
-            (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
-                .showSoftInput(address, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
-        }, LinearLayout.LayoutParams(-1, 58).apply { bottomMargin = 22 })
-        page.addView(txt("YOUR SERVICES", 12f, true).apply {
-            setTextColor(muted()); setPadding(3, 0, 0, 10)
-        })
-        val serviceNames = services.keys.filter { prefs.getBoolean("service_" + it, true) }.toList()
-        serviceNames.chunked(2).forEach { pair ->
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-            }
-            pair.forEach { name ->
-                row.addView(btn(serviceIcon(name) + "    " + name) { navigate(services[name]!!) },
-                    LinearLayout.LayoutParams(0, 54, 1f).apply { setMargins(3, 3, 3, 3) })
-            }
-            if (pair.size == 1) {
-                row.addView(View(this), LinearLayout.LayoutParams(0, 54, 1f).apply {
-                    setMargins(3, 3, 3, 3)
-                })
-            }
-            page.addView(row, LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT))
+    private fun homePanel(): WebView {
+        return WebView(this).apply {
+            setBackgroundColor(Color.TRANSPARENT)
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.allowFileAccess = true
+            settings.allowContentAccess = false
+            settings.allowFileAccessFromFileURLs = false
+            settings.allowUniversalAccessFromFileURLs = false
+            addJavascriptInterface(HomeBridge(), "Imboss")
+            loadUrl("file:///android_asset/home/index.html")
         }
-        page.addView(txt("QUICK ACCESS", 12f, true).apply {
-            setTextColor(muted()); setPadding(3, 20, 0, 10)
-        })
-        listOf("Google" to "https://google.com", "YouTube" to "https://youtube.com",
-            "Wikipedia" to "https://wikipedia.org").forEach { item ->
-            page.addView(btn("↗    " + item.first) { navigate(item.second) },
-                LinearLayout.LayoutParams(-1, 54).apply { bottomMargin = 7 })
+    }
+
+    inner class HomeBridge {
+        @JavascriptInterface fun isDark(): Boolean = dark
+        @JavascriptInterface fun isPrivate(): Boolean = privateMode
+        @JavascriptInterface fun getAccent(): String = String.format("#%06X", 0xFFFFFF and accent)
+        @JavascriptInterface fun openUrl(url: String) { runOnUiThread { navigate(url) } }
+        @JavascriptInterface fun setDark(value: Boolean) {
+            runOnUiThread {
+                dark = value
+                prefs.edit().putBoolean("dark", dark).apply()
+                root.background = pageBackground()
+                window.statusBarColor = bg()
+                window.navigationBarColor = bg()
+                showActive()
+            }
         }
-        page.addView(txt("IMBOSS  •  Browse your way", 11f).apply {
-            setTextColor(muted()); gravity = Gravity.CENTER; setPadding(0, 25, 0, 8)
-        })
-        scroll.addView(page)
-        return scroll
+        @JavascriptInterface fun manageServices() { runOnUiThread { this@MainActivity.manageServices() } }
+        @JavascriptInterface fun openBookmarks() { runOnUiThread { savedList("Bookmarks", "bookmarks") } }
+        @JavascriptInterface fun openHistory() { runOnUiThread { savedList("History", "history") } }
+        @JavascriptInterface fun openDownloads() { runOnUiThread { startActivity(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)) } }
     }
 
     private fun serviceIcon(name: String) = when (name) {
