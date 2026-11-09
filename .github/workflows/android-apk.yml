@@ -13,12 +13,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Build React UI
+      - name: Build React UI as local WebView assets
         run: |
           npm install --prefix web-ui
           npm run build --prefix web-ui
           mkdir -p app/src/main/assets/home
           cp -R web-ui/dist/. app/src/main/assets/home/
+          test -s app/src/main/assets/home/index.html
+          test -s app/src/main/assets/home/app.js
+          test -s app/src/main/assets/home/app.css
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -28,6 +31,8 @@ jobs:
           gradle-version: '8.9'
       - name: Build debug APK
         run: gradle assembleDebug
+      - name: Verify APK output
+        run: test -s app/build/outputs/apk/debug/app-debug.apk
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:

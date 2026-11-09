@@ -1,13 +1,19 @@
 {
   "name": "imboss-web-ui",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
-  "scripts": { "build": "vite build --base=./" },
+  "scripts": {
+    "build": "rm -rf dist && mkdir -p dist && esbuild src/main.jsx --bundle --minify --format=iife --outfile=dist/app.js && cp src/style.css dist/app.css && printf '%s\\n' '<!doctype html>' '<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#090b16"><title>IMBOSS</title><link rel="stylesheet" href="./app.css"></head><body><div id="root"></div><script src="./app.js"></script></body></html>' > dist/index.html"
+  },
   "dependencies": {
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "lucide-react": "0.468.0"
   },
-  "devDependencies": { "@vitejs/plugin-react": "4.3.4", "vite": "5.4.14" }
+  "devDependencies": {
+    "esbuild": "0.24.2",
+    "@vitejs/plugin-react": "4.3.4",
+    "vite": "5.4.14"
+  }
 }
