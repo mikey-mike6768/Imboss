@@ -3,6 +3,7 @@ package com.imboss.browser
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.DownloadManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -45,6 +46,9 @@ class MainActivity : Activity() {
     private var engine = "Google"
     private var fullscreenView: View? = null
     private var fullscreenCallback: WebChromeClient.CustomViewCallback? = null
+    companion object {
+        @Volatile var activeInstance: MainActivity? = null
+    }
     private val prefs by lazy { getSharedPreferences("imboss_settings", Context.MODE_PRIVATE) }
     private val services = linkedMapOf(
         "Spotify" to "https://open.spotify.com",
@@ -57,6 +61,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        activeInstance = this
         dark = prefs.getBoolean("dark", true)
         accent = prefs.getInt("accent", accent)
         engine = prefs.getString("engine", "Google") ?: "Google"
@@ -219,6 +224,7 @@ class MainActivity : Activity() {
             .replace("; wv", "")
             .replace("Version/4.0 ", "")
         settings.mediaPlaybackRequiresUserGesture = false
+        addJavascriptInterface(MediaBridge(), "ImbossMedia")
         settings.javaScriptCanOpenWindowsAutomatically = false
         settings.setSupportMultipleWindows(false)
         settings.allowFileAccess = false
@@ -269,6 +275,7 @@ class MainActivity : Activity() {
                 tab.url = url ?: tab.url
                 if (!privateMode && tab.url.startsWith("http")) addHistory(tab.url)
                 if (tabs.indexOf(tab) == active) address.setText(tab.url)
+                installMediaHooks(view)
                 refreshTabs()
             }
         }
@@ -285,6 +292,52 @@ class MainActivity : Activity() {
                 toast("Download started")
             } catch (_: Exception) { toast("Download could not start") }
         })
+    }
+
+    inner class MediaBridge {
+        @JavascriptInterface fun onPlaybackChanged(playing: Boolean, title: String?) {
+            runOnUiThread {
+                val intent = Intent(this@MainActivity, MediaPlaybackService::class.java).apply {
+                    action = if (playing) MediaPlaybackService.ACTION_PLAYING else MediaPlaybackService.ACTION_PAUSED
+                    putExtra(MediaPlaybackService.EXTRA_TITLE, title?.take(120) ?: "IMBOSS media")
+                    putExtra(MediaPlaybackService.EXTRA_URL, tabs.getOrNull(active)?.url ?: "")
+                }
+                if (android.os.Build.VERSION.SDK_INT >= 26) startForegroundService(intent) else startService(intent)
+            }
+        }
+    }
+
+    private fun installMediaHooks(web: WebView?) {
+        val script = """
+            (function() {
+              if (window.__imbossMediaHooked) return;
+              window.__imbossMediaHooked = true;
+              function report(el, playing) {
+                var t = (document.title || el.getAttribute('aria-label') || 'Media').slice(0,120);
+                try { window.ImbossMedia.onPlaybackChanged(playing, t); } catch(e) {}
+              }
+              document.addEventListener('play', function(e) {
+                if (e.target && (e.target.tagName === 'VIDEO' || e.target.tagName === 'AUDIO')) report(e.target, true);
+              }, true);
+              document.addEventListener('pause', function(e) {
+                if (e.target && (e.target.tagName === 'VIDEO' || e.target.tagName === 'AUDIO')) report(e.target, false);
+              }, true);
+              document.addEventListener('ended', function(e) {
+                if (e.target && (e.target.tagName === 'VIDEO' || e.target.tagName === 'AUDIO')) report(e.target, false);
+              }, true);
+            })();
+        """.trimIndent()
+        web?.evaluateJavascript(script, null)
+    }
+
+    internal fun controlWebPlayback(play: Boolean) {
+        runOnUiThread {
+            val js = if (play)
+                "document.querySelectorAll('video,audio').forEach(function(m){if(m.paused)m.play().catch(function(){});})"
+            else
+                "document.querySelectorAll('video,audio').forEach(function(m){if(!m.paused)m.pause();})"
+            tabs.getOrNull(active)?.web?.evaluateJavascript(js, null)
+        }
     }
 
     private fun newTab(url: String? = null) {
@@ -521,6 +574,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        if (activeInstance === this) activeInstance = null
         tabs.forEach { it.web.stopLoading(); it.web.destroy() }
         tabs.clear()
         super.onDestroy()
