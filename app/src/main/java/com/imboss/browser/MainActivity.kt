@@ -164,7 +164,7 @@ class MainActivity : Activity() {
             runOnUiThread {
                 dark = value
                 prefs.edit().putBoolean("dark", dark).apply()
-                root.background = pageBackground()
+                root.setBackgroundColor(bg())
                 window.statusBarColor = bg()
                 window.navigationBarColor = bg()
                 showActive()
