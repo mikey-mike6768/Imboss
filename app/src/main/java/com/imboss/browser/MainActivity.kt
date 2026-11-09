@@ -390,7 +390,7 @@ class MainActivity : Activity() {
         val keys = arrayOf("media_background", "media_auto_pip", "media_notifications", "media_lock_controls",
             "media_bluetooth", "media_immersive", "media_auto_landscape", "media_resume_focus")
         val checked = keys.mapIndexed { i, key -> prefs.getBoolean(key, i != 1 && i != 7) }.toBooleanArray()
-        val dialog = AlertDialog.Builder(this).setTitle("IMBOSS Media Center")
+        val dialog = AlertDialog.Builder(android.view.ContextThemeWrapper(this, if (dark) android.R.style.Theme_Material_Dialog_Alert else android.R.style.Theme_Material_Light_Dialog_Alert)).setTitle("IMBOSS Media Center")
             .setMultiChoiceItems(labels, checked) { _, which, enabled -> prefs.edit().putBoolean(keys[which], enabled).apply() }
             .setPositiveButton("Done", null)
             .setNeutralButton("Active media tabs") { _, _ -> activeMediaDialog() }
@@ -405,11 +405,11 @@ class MainActivity : Activity() {
         val activeTabs = tabs.mapIndexedNotNull { i, tab -> if (tab.playing) i to tab else null }
         if (activeTabs.isEmpty()) { toast("No active media tabs detected"); return }
         val labels = activeTabs.map { (_, tab) -> (if (tab.muted) "Muted • " else "Playing • ") + tab.title }.toTypedArray()
-        AlertDialog.Builder(this).setTitle("Active media")
+        AlertDialog.Builder(android.view.ContextThemeWrapper(this, if (dark) android.R.style.Theme_Material_Dialog_Alert else android.R.style.Theme_Material_Light_Dialog_Alert)).setTitle("Active media")
             .setItems(labels) { _, which ->
                 val (index, tab) = activeTabs[which]
                 val actions = arrayOf(if (tab.muted) "Unmute tab" else "Mute tab", "Stop this tab", "Switch to tab")
-                AlertDialog.Builder(this).setTitle(tab.title).setItems(actions) { _, action ->
+                AlertDialog.Builder(android.view.ContextThemeWrapper(this, if (dark) android.R.style.Theme_Material_Dialog_Alert else android.R.style.Theme_Material_Light_Dialog_Alert)).setTitle(tab.title).setItems(actions) { _, action ->
                     when (action) {
                         0 -> {
                             tab.muted = !tab.muted
@@ -518,7 +518,7 @@ class MainActivity : Activity() {
             if (tabs.isEmpty()) newTab() else { active = index.coerceAtMost(tabs.lastIndex); showActive() }
         }
         if (tabs[index].playing) {
-            AlertDialog.Builder(this).setTitle("Media is playing")
+            AlertDialog.Builder(android.view.ContextThemeWrapper(this, if (dark) android.R.style.Theme_Material_Dialog_Alert else android.R.style.Theme_Material_Light_Dialog_Alert)).setTitle("Media is playing")
                 .setMessage("Stop playback and close this tab?")
                 .setPositiveButton("Close tab") { _, _ -> close() }
                 .setNegativeButton("Keep open", null).show()
@@ -580,7 +580,7 @@ class MainActivity : Activity() {
 
     private fun tabsDialog() {
         val names = tabs.mapIndexed { i, tab -> (if (i == active) "● " else "") + tab.title + "  (tap to close)" }.toTypedArray()
-        AlertDialog.Builder(this).setTitle("Open tabs: " + tabs.size)
+        AlertDialog.Builder(android.view.ContextThemeWrapper(this, if (dark) android.R.style.Theme_Material_Dialog_Alert else android.R.style.Theme_Material_Light_Dialog_Alert)).setTitle("Open tabs: " + tabs.size)
             .setItems(names) { _, which -> closeTab(which) }
             .setPositiveButton("New tab") { _, _ -> newTab() }
             .setNegativeButton("Done", null).show()
@@ -589,7 +589,7 @@ class MainActivity : Activity() {
     private fun menuDialog() {
         val items = arrayOf("Bookmarks", "History", "Downloads", "Manage services",
             "Private browsing: " + if (privateMode) "ON" else "OFF", "Clear browsing data", "Media Center", "Settings")
-        AlertDialog.Builder(this).setTitle("IMBOSS").setItems(items) { _, which ->
+        AlertDialog.Builder(android.view.ContextThemeWrapper(this, if (dark) android.R.style.Theme_Material_Dialog_Alert else android.R.style.Theme_Material_Light_Dialog_Alert)).setTitle("IMBOSS").setItems(items) { _, which ->
             when (which) {
                 0 -> savedList("Bookmarks", "bookmarks")
                 1 -> savedList("History", "history")
@@ -611,9 +611,9 @@ class MainActivity : Activity() {
     private fun settingsDialog() {
         val items = arrayOf("Search engine: " + engine, "Switch " + if (dark) "to light theme" else "to dark theme",
             "Accent colour", "Service shortcuts", "Media Center", "About IMBOSS")
-        AlertDialog.Builder(this).setTitle("Settings").setItems(items) { _, which ->
+        AlertDialog.Builder(android.view.ContextThemeWrapper(this, if (dark) android.R.style.Theme_Material_Dialog_Alert else android.R.style.Theme_Material_Light_Dialog_Alert)).setTitle("Settings").setItems(items) { _, which ->
             when (which) {
-                0 -> AlertDialog.Builder(this).setTitle("Search engine")
+                0 -> AlertDialog.Builder(android.view.ContextThemeWrapper(this, if (dark) android.R.style.Theme_Material_Dialog_Alert else android.R.style.Theme_Material_Light_Dialog_Alert)).setTitle("Search engine")
                     .setSingleChoiceItems(arrayOf("Google", "Bing", "DuckDuckGo"), arrayOf("Google", "Bing", "DuckDuckGo").indexOf(engine)) { dialog, item ->
                         engine = arrayOf("Google", "Bing", "DuckDuckGo")[item]
                         prefs.edit().putString("engine", engine).apply()
@@ -627,7 +627,7 @@ class MainActivity : Activity() {
                 }
                 2 -> {
                     val colours = intArrayOf(0xFF86A8FF.toInt(), 0xFF78DCC6.toInt(), 0xFFFF9DB5.toInt(), 0xFFC2A4FF.toInt(), 0xFFFFC477.toInt())
-                    AlertDialog.Builder(this).setTitle("Accent colour")
+                    AlertDialog.Builder(android.view.ContextThemeWrapper(this, if (dark) android.R.style.Theme_Material_Dialog_Alert else android.R.style.Theme_Material_Light_Dialog_Alert)).setTitle("Accent colour")
                         .setItems(arrayOf("Ice blue", "Mint", "Rose", "Lavender", "Amber")) { _, i ->
                             accent = colours[i]
                             prefs.edit().putInt("accent", accent).apply()
@@ -636,7 +636,7 @@ class MainActivity : Activity() {
                 }
                 3 -> manageServices()
                 4 -> mediaCenterDialog()
-                5 -> AlertDialog.Builder(this).setTitle("IMBOSS Browser")
+                5 -> AlertDialog.Builder(android.view.ContextThemeWrapper(this, if (dark) android.R.style.Theme_Material_Dialog_Alert else android.R.style.Theme_Material_Light_Dialog_Alert)).setTitle("IMBOSS Browser")
                     .setMessage("Version 0.2.0\nUses Android System WebView (Chromium-based), not a separately bundled Chromium engine. Private mode prevents this app from saving its browsing history, but does not guarantee anonymity or block website tracking.")
                     .setPositiveButton("OK", null).show()
             }
@@ -652,7 +652,7 @@ class MainActivity : Activity() {
     private fun manageServices() {
         val names = services.keys.toTypedArray()
         val checked = names.map { prefs.getBoolean("service_" + it, true) }.toBooleanArray()
-        AlertDialog.Builder(this).setTitle("Show on homepage")
+        AlertDialog.Builder(android.view.ContextThemeWrapper(this, if (dark) android.R.style.Theme_Material_Dialog_Alert else android.R.style.Theme_Material_Light_Dialog_Alert)).setTitle("Show on homepage")
             .setMultiChoiceItems(names, checked) { _, i, enabled ->
                 prefs.edit().putBoolean("service_" + names[i], enabled).apply()
             }.setPositiveButton("Done") { _, _ -> showActive() }
@@ -680,13 +680,13 @@ class MainActivity : Activity() {
         val data = JSONArray(prefs.getString(key, "[]") ?: "[]")
         val list = (0 until data.length()).map { data.optString(it) }
         if (list.isEmpty()) { toast("No " + title.lowercase() + " yet"); return }
-        AlertDialog.Builder(this).setTitle(title).setItems(list.toTypedArray()) { _, i -> navigate(list[i]) }
+        AlertDialog.Builder(android.view.ContextThemeWrapper(this, if (dark) android.R.style.Theme_Material_Dialog_Alert else android.R.style.Theme_Material_Light_Dialog_Alert)).setTitle(title).setItems(list.toTypedArray()) { _, i -> navigate(list[i]) }
             .setNeutralButton("Clear") { _, _ -> prefs.edit().putString(key, "[]").apply(); toast(title + " cleared") }
             .setNegativeButton("Close", null).show()
     }
 
     private fun clearData() {
-        AlertDialog.Builder(this).setTitle("Clear browsing data?")
+        AlertDialog.Builder(android.view.ContextThemeWrapper(this, if (dark) android.R.style.Theme_Material_Dialog_Alert else android.R.style.Theme_Material_Light_Dialog_Alert)).setTitle("Clear browsing data?")
             .setMessage("Clears saved history, page cache and form data. Bookmarks remain.")
             .setPositiveButton("Clear") { _, _ ->
                 prefs.edit().putString("history", "[]").apply()
