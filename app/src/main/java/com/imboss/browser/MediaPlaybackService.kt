@@ -17,6 +17,8 @@ class MediaPlaybackService : Service() {
         const val ACTION_PLAYING = "com.imboss.browser.MEDIA_PLAYING"
         const val ACTION_PAUSED = "com.imboss.browser.MEDIA_PAUSED"
         const val ACTION_STOP = "com.imboss.browser.MEDIA_STOP"
+        const val ACTION_PLAY = "com.imboss.browser.MEDIA_ACTION_PLAY"
+        const val ACTION_PAUSE = "com.imboss.browser.MEDIA_ACTION_PAUSE"
         const val EXTRA_TITLE = "media_title"
         const val EXTRA_URL = "media_url"
         private const val CHANNEL_ID = "imboss_media"
@@ -54,6 +56,12 @@ class MediaPlaybackService : Service() {
         if (intent?.action == ACTION_STOP) {
             stopSelf()
             return START_NOT_STICKY
+        }
+        if (intent?.action == ACTION_PLAY || intent?.action == ACTION_PAUSE) {
+            val wantsPlay = intent.action == ACTION_PLAY
+            MainActivity.activeInstance?.controlWebPlayback(wantsPlay)
+            updateState(wantsPlay)
+            return START_STICKY
         }
         title = intent?.getStringExtra(EXTRA_TITLE)?.takeIf { it.isNotBlank() } ?: title
         playing = intent?.action == ACTION_PLAYING
@@ -116,10 +124,10 @@ class MediaPlaybackService : Service() {
     }
 
     private fun mediaActionPendingIntent(): PendingIntent {
-        val intent = Intent(this, MediaButtonReceiver::class.java).apply {
-            action = if (playing) MediaButtonReceiver.ACTION_PAUSE else MediaButtonReceiver.ACTION_PLAY
+        val intent = Intent(this, MediaPlaybackService::class.java).apply {
+            action = if (playing) ACTION_PAUSE else ACTION_PLAY
         }
-        return PendingIntent.getBroadcast(
+        return PendingIntent.getService(
             this, 1, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
     }
