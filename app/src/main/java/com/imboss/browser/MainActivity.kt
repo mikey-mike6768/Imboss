@@ -258,6 +258,9 @@ class MainActivity : Activity() {
                 }
                 fullscreenView = view
                 fullscreenCallback = callback
+                if (android.os.Build.VERSION.SDK_INT >= 26) {
+                    try { setPictureInPictureParams(buildPipParams()) } catch (_: Exception) { }
+                }
                 previousOrientation = requestedOrientation
                 if (prefs.getBoolean("media_auto_landscape", true)) requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                 root.getChildAt(0).visibility = View.GONE
@@ -324,8 +327,11 @@ class MainActivity : Activity() {
                     tabs[found].playing = playing
                     if (!playing && tabs.none { it.playing }) mediaTabIndex = -1
                     refreshTabs()
-                    if (android.os.Build.VERSION.SDK_INT >= 26 && playing) {
-                        owner.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, true)
+                    if (android.os.Build.VERSION.SDK_INT >= 26) {
+                        if (playing) owner.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, true)
+                        if (fullscreenView != null) {
+                            try { setPictureInPictureParams(buildPipParams()) } catch (_: Exception) { }
+                        }
                     }
                 }
                 val intent = Intent(this@MainActivity, MediaPlaybackService::class.java).apply {
