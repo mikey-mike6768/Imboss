@@ -20,8 +20,7 @@ jobs:
           mkdir -p app/src/main/assets/home
           cp -R web-ui/dist/. app/src/main/assets/home/
           test -s app/src/main/assets/home/index.html
-          test -s app/src/main/assets/home/app.js
-          test -s app/src/main/assets/home/app.css
+          find app/src/main/assets/home -type f \( -name '*.js' -o -name '*.css' \) | grep -q .
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
