@@ -124,11 +124,9 @@ class MediaPlaybackService : Service() {
         mediaTab = intent?.getIntExtra(EXTRA_TAB, mediaTab) ?: mediaTab
         startForeground(NOTIFICATION_ID, buildNotification())
         if (intent?.action == ACTION_PLAYING) {
-            if (requestAudioFocus()) updateState(true)
-            else {
-                MainActivity.activeInstance?.controlWebPlayback(false, mediaTab)
-                updateState(false)
-            }
+            // Chromium/WebView owns focus for its HTML media pipeline. Do not request
+            // a second focus lease here or pause the page when this redundant request fails.
+            updateState(true)
         } else updateState(false)
         return START_STICKY
     }
