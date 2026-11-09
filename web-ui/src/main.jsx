@@ -2,8 +2,8 @@ import React, { useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   ArrowUpRight, Bookmark, ChevronRight, CircleHelp, Clock3, Download,
-  Globe2, LayoutGrid, Moon, Music2, Play, Plus, Search, Settings2,
-  ShieldCheck, Sparkles, Sun, Telegram, Video, X, MessageCircle, House
+  Moon, Music2, Play, Search, Settings2,
+  Sparkles, Sun, Video, MessageCircle
 } from "lucide-react";
 import "./style.css";
 
