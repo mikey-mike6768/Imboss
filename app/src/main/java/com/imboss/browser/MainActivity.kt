@@ -265,14 +265,11 @@ class MainActivity : Activity() {
                 root.getChildAt(4).visibility = View.GONE
                 content.removeAllViews()
                 content.addView(view, FrameLayout.LayoutParams(-1, -1))
-                window.decorView.systemUiVisibility = (
-                    View.SYSTEM_UI_FLAG_FULLSCREEN or
-                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
-                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
-                    View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-                    View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                )
+                window.decorView.systemUiVisibility = if (prefs.getBoolean("media_immersive", true)) (
+                    View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                    View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                ) else View.SYSTEM_UI_FLAG_FULLSCREEN
             }
 
             override fun onHideCustomView() {
@@ -313,6 +310,11 @@ class MainActivity : Activity() {
     inner class MediaBridge {
         @JavascriptInterface fun onPlaybackChanged(playing: Boolean, title: String?, url: String?) {
             runOnUiThread {
+                if (!prefs.getBoolean("media_background", true)) {
+                    val current = tabs.getOrNull(active)
+                    current?.web?.evaluateJavascript("document.querySelectorAll('video,audio').forEach(m=>m.pause())", null)
+                    return@runOnUiThread
+                }
                 val mediaUrl = url ?: ""
                 val found = tabs.indexOfFirst { it.url == mediaUrl }
                 if (found >= 0) {
@@ -408,7 +410,8 @@ class MainActivity : Activity() {
                     when (action) {
                         0 -> {
                             tab.muted = !tab.muted
-                            tab.web.evaluateJavascript("document.querySelectorAll('video,audio').forEach(m=>m.muted=\u0024{tab.muted})", null)
+                            val mutedValue = if (tab.muted) "true" else "false"
+                            tab.web.evaluateJavascript("document.querySelectorAll('video,audio').forEach(m=>m.muted=$mutedValue)", null)
                             activeMediaDialog()
                         }
                         1 -> { tab.web.evaluateJavascript("document.querySelectorAll('video,audio').forEach(m=>m.pause())", null); tab.playing = false; refreshTabs() }
@@ -716,6 +719,13 @@ class MainActivity : Activity() {
         if (isInPictureInPictureMode) {
             for (i in 0 until root.childCount) root.getChildAt(i).visibility = View.GONE
         } else if (fullscreenView == null) showActive()
+    }
+
+    override fun onStop() {
+        if (!prefs.getBoolean("media_background", true)) {
+            tabs.forEach { it.web.evaluateJavascript("document.querySelectorAll('video,audio').forEach(m=>m.pause())", null) }
+        }
+        super.onStop()
     }
 
     override fun onBackPressed() {
