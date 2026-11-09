@@ -62,6 +62,8 @@ class MainActivity : Activity() {
         newTab()
     }
 
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density + 0.5f).toInt()
+
     private fun bg() = if (dark) Color.rgb(10, 15, 29) else Color.rgb(232, 238, 248)
     private fun fg() = if (dark) Color.WHITE else Color.rgb(23, 32, 50)
     private fun muted() = if (dark) 0xFF9EABC2.toInt() else 0xFF66748B.toInt()
@@ -79,8 +81,8 @@ class MainActivity : Activity() {
     private fun btn(value: String, action: () -> Unit) = TextView(this).apply {
         text = value; textSize = 14f; setTextColor(fg()); gravity = Gravity.CENTER
         includeFontPadding = false
-        minHeight = 42
-        setPadding(12, 3, 12, 3)
+        minHeight = dp(44)
+        setPadding(dp(12), dp(3), dp(12), dp(3))
         background = GradientDrawable().apply {
             setColor(if (dark) 0xFF1A2638.toInt() else 0xFFFFFFFF.toInt())
             cornerRadius = 14f
@@ -91,8 +93,9 @@ class MainActivity : Activity() {
     }
 
     private fun navBtn(value: String, action: () -> Unit) = TextView(this).apply {
-        text = value; textSize = 21f; setTextColor(if (dark) 0xFFE8EDF7.toInt() else 0xFF26364D.toInt())
+        text = value; textSize = 22f; setTextColor(if (dark) 0xFFE8EDF7.toInt() else 0xFF26364D.toInt())
         gravity = Gravity.CENTER; includeFontPadding = false
+        minHeight = dp(48)
         background = GradientDrawable().apply {
             setColor(if (dark) 0xFF182335.toInt() else 0xFFFFFFFF.toInt())
             cornerRadius = 13f
@@ -105,25 +108,25 @@ class MainActivity : Activity() {
     private fun buildUi() {
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(12, 5, 12, 8)
+            setPadding(dp(12), dp(8), dp(12), dp(8))
             setBackgroundColor(bg())
         }
-        val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(5, 0, 2, 5) }
+        val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(5), 0, dp(2), dp(5)) }
         header.addView(txt("IMBOSS", 22f, true).apply {
             letterSpacing = 0.16f; setTextColor(accent)
-        }, LinearLayout.LayoutParams(0, 46, 1f))
-        header.addView(btn("⚙") { settingsDialog() }, LinearLayout.LayoutParams(42, 42).apply { setMargins(4, 0, 4, 0) })
-        header.addView(btn("▢ " + tabs.size) { tabsDialog() }, LinearLayout.LayoutParams(-2, 42))
+        }, LinearLayout.LayoutParams(0, dp(52), 1f))
+        header.addView(btn("⚙") { settingsDialog() }, LinearLayout.LayoutParams(dp(48), dp(48)).apply { setMargins(dp(4), 0, dp(4), 0) })
+        header.addView(btn("▢ " + tabs.size) { tabsDialog() }, LinearLayout.LayoutParams(-2, dp(48)))
         root.addView(header)
 
         val bar = LinearLayout(this).apply {
-            gravity = Gravity.CENTER_VERTICAL; background = glass(32f); setPadding(7, 2, 5, 2)
+            gravity = Gravity.CENTER_VERTICAL; background = glass(32f); setPadding(dp(7), dp(2), dp(5), dp(2))
         }
         address = EditText(this).apply {
             hint = "Search or enter website"; textSize = 15f
             setTextColor(fg()); setHintTextColor(muted()); setSingleLine(true)
             setBackgroundColor(Color.TRANSPARENT); imeOptions = EditorInfo.IME_ACTION_GO
-            setPadding(10, 9, 5, 9); setSelectAllOnFocus(true)
+            setPadding(dp(10), dp(9), dp(5), dp(9)); setSelectAllOnFocus(true)
             setOnEditorActionListener { _, action, _ ->
                 if (action == EditorInfo.IME_ACTION_GO || action == EditorInfo.IME_ACTION_DONE) {
                     navigate(text.toString()); true
@@ -131,27 +134,27 @@ class MainActivity : Activity() {
             }
         }
         bar.addView(address, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        bar.addView(btn("☆") { bookmark() }, LinearLayout.LayoutParams(42, 40).apply { setMargins(3, 0, 3, 0) })
-        bar.addView(btn("Go") { navigate(address.text.toString()) }, LinearLayout.LayoutParams(48, 40))
+        bar.addView(btn("☆") { bookmark() }, LinearLayout.LayoutParams(dp(44), dp(44)).apply { setMargins(dp(3), 0, dp(3), 0) })
+        bar.addView(btn("Go") { navigate(address.text.toString()) }, LinearLayout.LayoutParams(dp(48), dp(44)))
         root.addView(bar)
 
-        val tabsScroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; setPadding(0, 7, 0, 7) }
+        val tabsScroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; setPadding(0, dp(6), 0, dp(6)) }
         tabStrip = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         tabsScroll.addView(tabStrip)
-        root.addView(tabsScroll, LinearLayout.LayoutParams(-1, 44))
+        root.addView(tabsScroll, LinearLayout.LayoutParams(-1, dp(48)))
 
         content = FrameLayout(this)
         root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
-        val bottom = LinearLayout(this).apply { gravity = Gravity.CENTER; setPadding(0, 8, 0, 0) }
+        val bottom = LinearLayout(this).apply { gravity = Gravity.CENTER; setPadding(0, dp(8), 0, 0) }
         listOf(
             "‹" to { back() }, "›" to { forward() }, "⌂" to { home() },
             "＋" to { newTab() }, "⋯" to { menuDialog() }
         ).forEach { pair ->
-            bottom.addView(navBtn(pair.first, pair.second), LinearLayout.LayoutParams(0, 44, 1f).apply {
-                setMargins(3, 0, 3, 0)
+            bottom.addView(navBtn(pair.first, pair.second), LinearLayout.LayoutParams(0, dp(52), 1f).apply {
+                setMargins(dp(3), 0, dp(3), 0)
             })
         }
-        root.addView(bottom, LinearLayout.LayoutParams(-1, 48))
+        root.addView(bottom, LinearLayout.LayoutParams(-1, dp(64)))
         setContentView(root)
         window.statusBarColor = bg()
         window.navigationBarColor = bg()
@@ -284,7 +287,7 @@ class MainActivity : Activity() {
         tabs.forEachIndexed { i, tab ->
             tabStrip.addView(btn((if (i == active) "● " else "") + tab.title.take(15) + "  ×") {
                 if (i == active) closeTab(i) else switchTab(i)
-            }, LinearLayout.LayoutParams(-2, 36).apply { setMargins(3, 0, 3, 0) })
+            }, LinearLayout.LayoutParams(-2, dp(40)).apply { setMargins(dp(3), 0, dp(3), 0) })
         }
         if (::root.isInitialized && root.childCount > 0) {
             val header = root.getChildAt(0) as LinearLayout
