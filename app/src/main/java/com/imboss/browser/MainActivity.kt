@@ -43,6 +43,8 @@ class MainActivity : Activity() {
     private var privateMode = false
     private var accent = 0xFF86A8FF.toInt()
     private var engine = "Google"
+    private var fullscreenView: View? = null
+    private var fullscreenCallback: WebChromeClient.CustomViewCallback? = null
     private val prefs by lazy { getSharedPreferences("imboss_settings", Context.MODE_PRIVATE) }
     private val services = linkedMapOf(
         "Spotify" to "https://open.spotify.com",
@@ -225,6 +227,35 @@ class MainActivity : Activity() {
             override fun onReceivedTitle(view: WebView?, title: String?) {
                 tabs.firstOrNull { it.web === view }?.let { it.title = title?.take(24) ?: it.title; refreshTabs() }
             }
+
+            // HTML5 video players (YouTube, Netflix, etc.) request a custom fullscreen surface.
+            override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
+                if (view == null) return
+                if (fullscreenView != null) {
+                    callback?.onCustomViewHidden()
+                    return
+                }
+                fullscreenView = view
+                fullscreenCallback = callback
+                root.getChildAt(0).visibility = View.GONE
+                root.getChildAt(1).visibility = View.GONE
+                root.getChildAt(2).visibility = View.GONE
+                root.getChildAt(4).visibility = View.GONE
+                content.removeAllViews()
+                content.addView(view, FrameLayout.LayoutParams(-1, -1))
+                window.decorView.systemUiVisibility = (
+                    View.SYSTEM_UI_FLAG_FULLSCREEN or
+                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                    View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                    View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                )
+            }
+
+            override fun onHideCustomView() {
+                exitFullscreen()
+            }
         }
         webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?) = false
@@ -262,6 +293,17 @@ class MainActivity : Activity() {
         tabs.add(tab); active = tabs.lastIndex
         showActive()
         if (url != null) web.loadUrl(url)
+    }
+
+    private fun exitFullscreen() {
+        val view = fullscreenView ?: return
+        fullscreenView = null
+        content.removeView(view)
+        fullscreenCallback?.onCustomViewHidden()
+        fullscreenCallback = null
+        window.decorView.systemUiVisibility = if (dark) 0 else
+            (View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR)
+        showActive()
     }
 
     private fun showActive() {
@@ -469,7 +511,13 @@ class MainActivity : Activity() {
     private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
 
     override fun onBackPressed() {
-        if (tabs.getOrNull(active)?.web?.canGoBack() == true) back() else home()
+        if (fullscreenView != null) {
+            exitFullscreen()
+        } else if (tabs.getOrNull(active)?.web?.canGoBack() == true) {
+            back()
+        } else {
+            home()
+        }
     }
 
     override fun onDestroy() {
