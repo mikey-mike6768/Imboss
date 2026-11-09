@@ -79,23 +79,41 @@ class MainActivity : Activity() {
     private fun btn(value: String, action: () -> Unit) = TextView(this).apply {
         text = value; textSize = 14f; setTextColor(fg()); gravity = Gravity.CENTER
         includeFontPadding = false
-        minHeight = 48
-        setPadding(14, 4, 14, 4); background = glass(); isClickable = true
+        minHeight = 42
+        setPadding(12, 3, 12, 3)
+        background = GradientDrawable().apply {
+            setColor(if (dark) 0xFF1A2638.toInt() else 0xFFFFFFFF.toInt())
+            cornerRadius = 14f
+            setStroke(1, if (dark) 0xFF2B3A50.toInt() else 0xFFD9E1EC.toInt())
+        }
+        isClickable = true
+        setOnClickListener { action() }
+    }
+
+    private fun navBtn(value: String, action: () -> Unit) = TextView(this).apply {
+        text = value; textSize = 21f; setTextColor(if (dark) 0xFFE8EDF7.toInt() else 0xFF26364D.toInt())
+        gravity = Gravity.CENTER; includeFontPadding = false
+        background = GradientDrawable().apply {
+            setColor(if (dark) 0xFF182335.toInt() else 0xFFFFFFFF.toInt())
+            cornerRadius = 13f
+            setStroke(1, if (dark) 0xFF2B3A50.toInt() else 0xFFD9E1EC.toInt())
+        }
+        isClickable = true
         setOnClickListener { action() }
     }
 
     private fun buildUi() {
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(10, 4, 10, 6)
+            setPadding(12, 5, 12, 8)
             setBackgroundColor(bg())
         }
         val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(5, 0, 2, 5) }
         header.addView(txt("IMBOSS", 22f, true).apply {
             letterSpacing = 0.16f; setTextColor(accent)
         }, LinearLayout.LayoutParams(0, 46, 1f))
-        header.addView(btn("⚙") { settingsDialog() })
-        header.addView(btn("▢ " + tabs.size) { tabsDialog() })
+        header.addView(btn("⚙") { settingsDialog() }, LinearLayout.LayoutParams(42, 42).apply { setMargins(4, 0, 4, 0) })
+        header.addView(btn("▢ " + tabs.size) { tabsDialog() }, LinearLayout.LayoutParams(-2, 42))
         root.addView(header)
 
         val bar = LinearLayout(this).apply {
@@ -113,14 +131,14 @@ class MainActivity : Activity() {
             }
         }
         bar.addView(address, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        bar.addView(btn("☆") { bookmark() })
-        bar.addView(btn("Go") { navigate(address.text.toString()) })
+        bar.addView(btn("☆") { bookmark() }, LinearLayout.LayoutParams(42, 40).apply { setMargins(3, 0, 3, 0) })
+        bar.addView(btn("Go") { navigate(address.text.toString()) }, LinearLayout.LayoutParams(48, 40))
         root.addView(bar)
 
         val tabsScroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; setPadding(0, 7, 0, 7) }
         tabStrip = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         tabsScroll.addView(tabStrip)
-        root.addView(tabsScroll, LinearLayout.LayoutParams(-1, 48))
+        root.addView(tabsScroll, LinearLayout.LayoutParams(-1, 44))
 
         content = FrameLayout(this)
         root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -129,11 +147,11 @@ class MainActivity : Activity() {
             "‹" to { back() }, "›" to { forward() }, "⌂" to { home() },
             "＋" to { newTab() }, "⋯" to { menuDialog() }
         ).forEach { pair ->
-            bottom.addView(btn(pair.first, pair.second), LinearLayout.LayoutParams(0, 48, 1f).apply {
+            bottom.addView(navBtn(pair.first, pair.second), LinearLayout.LayoutParams(0, 44, 1f).apply {
                 setMargins(3, 0, 3, 0)
             })
         }
-        root.addView(bottom)
+        root.addView(bottom, LinearLayout.LayoutParams(-1, 48))
         setContentView(root)
         window.statusBarColor = bg()
         window.navigationBarColor = bg()
@@ -266,7 +284,7 @@ class MainActivity : Activity() {
         tabs.forEachIndexed { i, tab ->
             tabStrip.addView(btn((if (i == active) "● " else "") + tab.title.take(15) + "  ×") {
                 if (i == active) closeTab(i) else switchTab(i)
-            }, LinearLayout.LayoutParams(-2, 40).apply { setMargins(3, 0, 3, 0) })
+            }, LinearLayout.LayoutParams(-2, 36).apply { setMargins(3, 0, 3, 0) })
         }
         if (::root.isInitialized && root.childCount > 0) {
             val header = root.getChildAt(0) as LinearLayout
