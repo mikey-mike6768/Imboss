@@ -134,13 +134,10 @@ class MainActivity : Activity() {
         }
         root.addView(bottom)
         setContentView(root)
-        @Suppress("DEPRECATION")
         window.statusBarColor = bg()
-        @Suppress("DEPRECATION")
         window.navigationBarColor = bg()
-        @Suppress("DEPRECATION")
         window.decorView.systemUiVisibility = if (dark) 0 else
-            (ViewGroup.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or ViewGroup.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR)
+            (View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR)
     }
 
     private fun homePanel(): ScrollView {
